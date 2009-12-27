@@ -65,9 +65,9 @@ a {
 <script>
 window.addEvent('domready', function(){
 	var query = '';
-	var mootoolsQuery = 'http://mootools.net/search/?query={q}&search=1';
+	var mootoolsQuery = 'http://mootools.net/search/quicksearch.php?query={q}&results=5';
 	var yqlAPI = 'http://query.yahooapis.com/v1/public/yql';
-	var yqlQuery = 'select * from html where url="' + mootoolsQuery + '" and xpath=\'//ul[@id="results"]/li\' limit 5';
+	var yqlQuery = 'select * from json where url="' + mootoolsQuery + '" and (itemPath="json.json.url" or itemPath="json.json.title" or itemPath="json.json.fulltxt")';
 
 	var searchInput = $('search-input');
 	var searchButton = $('search-button');
@@ -129,7 +129,7 @@ window.addEvent('domready', function(){
 			}
 		},
 		// cancels the keyboard navigation when cursor kicks in
-		mouseenter: function(){
+		mouseover: function(){
 			var links = searchResult.getElements('a');
 			if (!links.length) return;
 			links.each(function(link){
@@ -139,45 +139,54 @@ window.addEvent('domready', function(){
 	});
 	
 	var descLimit = 40;
+	var ellipsis = '&#8230;';
+	var requestCache = {};
+	
+	var processResults = function(data){
+		if (!data || !data.query || !data.query.count || !data.query.results || !data.query.results.url.length){
+			searchResult.setStyle('display', 'block');
+			searchResult.set('html', '<li class="not-found">Oops, nothing found.</li>');
+			enableForm();
+			searchInput.focus();
+			searchInput.select();
+		} else {
+			if (!requestCache[query]) requestCache[query] = data;
+			
+			var results = data.query.results;
+			var url = results.url;
+			var len = url.length; // number of results
+			var title = results.title;
+			var fulltxt = results.fulltxt;
+			
+			var html = '';
+			for (var i=0; i<len; i++){
+				var desc = new Element('div', {html: fulltxt[i]}).get('text').clean(); // strip html
+				if (desc.length > descLimit) desc = desc.slice(0, descLimit) + ellipsis;
+				var data = {
+					url: url[i],
+					title: title[i],
+					desc: desc
+				};
+				html += ('<li>'
+					+ '<a href="{url}" title="{url}" target="_blank"><strong>{title}</strong> <span class="desc">{desc}</span></a>'
+					+ '</li>').substitute(data);
+			}
+			html += ('<li class="more">'
+				+ '<a href="' + mootoolsQuery + '" target="_blank" title="more results from MooTools Search site">&laquo; More</a>'
+				+ '</li>').substitute({q: query});
+			searchResult.set('html', html);
+			searchResult.setStyle('display', 'block');
+			var height = searchResult.getSize().y;
+			searchResult.setStyle('height', 0);
+			searchResult.tween('height', height);
+			enableForm();
+		}
+	}
 
-	var request = new Request({
+	var request = new Request.JSON({
 		url: yqlAPI,
 		link: 'cancel',
-		onSuccess: function(text){
-			var content = text.split('<results>');
-			if (content.length > 1 || content[1]){
-				var result = content[1].split('</results>')[0];
-				var temp = new Element('div', {html: result});
-				var html = '';
-				temp.getElements('li').each(function(li){
-					var link = li.getElements('h3 a')[0];
-					var desc = li.getElements('p.description')[0].get('text');
-					if (desc.length > descLimit) desc = desc.slice(0, descLimit) + '&#8230;';
-					var data = {
-						url: link.getProperty('href'),
-						title: link.get('text'),
-						desc: desc
-					};
-					var source = '<li>'
-						+ '<a href="{url}" title="{url}" target="_blank"><strong>{title}</strong> <span class="desc">{desc}</span></a>'
-						+ '</li>';
-					html += source.substitute(data);
-				});
-				html += ('<li class="more"><a href="' + mootoolsQuery + '" target="_blank" title="more results from MooTools Search site">&laquo; More</a></li>').substitute({q: query});
-				searchResult.set('html', html);
-				searchResult.setStyle('display', 'block');
-				var height = searchResult.getSize().y;
-				searchResult.setStyle('height', 0);
-				searchResult.tween('height', height);
-				enableForm();
-			} else {
-				searchResult.setStyle('display', 'block');
-				searchResult.set('html', '<li class="not-found">Oops, nothing found.</li>');
-				enableForm();
-				searchInput.focus();
-				searchInput.select();
-			}
-		},
+		onSuccess: processResults,
 		onCancel: function(){
 			enableForm();
 			searchInput.focus();
@@ -198,11 +207,16 @@ window.addEvent('domready', function(){
 		};
 		disableForm();
 		query = encodeURIComponent(q);
-		request.get({
-			q: yqlQuery.substitute({q: query}),
-			format: 'xml',
-			diagnostics: 'false'
-		});
+		
+		if (requestCache[query]){
+			processResults(requestCache[query]);
+		} else {
+			request.get({
+				q: yqlQuery.substitute({q: query}),
+				format: 'json',
+				diagnostics: 'false'
+			});
+		}
 	});
 });
 </script>
