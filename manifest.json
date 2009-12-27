@@ -1,6 +1,6 @@
 {
 	"name": "MooTools Search",
-	"version": "0.1",
+	"version": "0.2",
 	"description": "Extension to search MooTools' blogs, demos, documentation, forums and tutorials.",
 	"icons": {
 		"48": "icon48.png",
