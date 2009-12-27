@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<style>
+body{
+	font: message-box;
+	color: #313334;
+	background-color: #f4f5f5;
+	padding: 0;
+	text-align: center;
+	overflow: hidden;
+	width: 200px;
+	font-size: 12px;
+}
+#search-input{
+	width: 100%;
+}
+#search-result{
+	display: none;
+	text-align: left;
+	margin: .3em 0 0;
+	padding: 0;
+	list-style: none;
+	line-height: 1.5;
+	overflow: hidden;
+}
+#search-result li{
+	margin: 0;
+	padding: 0;
+	border-top: 1px solid #ddd;
+}
+#search-result li.more{
+	opacity: .7;
+}
+#search-result li.not-found{
+	color: red;
+	text-align: center;
+	padding: .4em .5em;
+}
+#search-result a{
+	display: block;
+	padding: .4em .5em;
+	color: #6B7B95;
+	background-color: transparent;
+	text-decoration: none;
+	outline: 0;
+	border-radius: 2px;
+	-webkit-border-radius: 2px;
+}
+#search-result a:hover,
+#search-result a:focus{
+	color: #fff;
+	background-color: #6B7B95;
+}
+#search-result a .desc{
+	display: block;
+	opacity: .6;
+}
+a {
+	transition-duration: .2s;
+	transition-property: color, background;
+	-webkit-transition-duration: .2s;
+	-webkit-transition-property: color, background;
+}
+</style>
+<script src="mootools-yui-compressed.js"></script>
+<script>
+window.addEvent('domready', function(){
+	var query = '';
+	var mootoolsQuery = 'http://mootools.net/search/?query={q}&search=1';
+	var yqlAPI = 'http://query.yahooapis.com/v1/public/yql';
+	var yqlQuery = 'select * from html where url="' + mootoolsQuery + '" and xpath=\'//ul[@id="results"]/li\' limit 5';
+
+	var searchInput = $('search-input');
+	var searchButton = $('search-button');
+	var searchResult = $('search-result').set('tween', {
+		onComplete: function(){
+			searchResult.setStyle('height', 'auto');
+			searchResult.getElements('a')[0].focus();
+		}
+	});
+	
+	var enableForm = function(){
+		searchInput.removeProperty('disabled');
+		searchButton.removeProperty('disabled');
+	};
+	
+	var disableForm = function(){
+		searchInput.setProperty('disabled', 'disabled');
+		searchButton.setProperty('disabled', 'disabled');
+	};
+	
+	searchInput.focus();
+	
+	var downCount = 0;
+	// press down twice to shift focus to the result list
+	searchInput.addEvent('keyup', function(e){
+		if (e.key == 'down'){
+			var links = searchResult.getElements('li a');
+			if (!links.length) return;
+			if (++downCount < 2) return;
+			e.stop();
+			links[0].focus();
+			downCount = 0;
+		} else {
+			downCount = 0;
+		}
+	});
+	
+	searchResult.addEvents({
+		// keyboard navigation
+		keyup: function(e){
+			if (e.key == 'down'){
+				e.stop();
+				var el = e.target;
+				if (el.get('tag') != 'a') return;
+				var next = el.getParent('li').getNext('li');
+				if (!next) return;
+				next.getElement('a').focus();
+			} else if (e.key == 'up'){
+				e.stop();
+				var el = e.target;
+				if (el.get('tag') != 'a') return;
+				var prev = el.getParent('li').getPrevious('li');
+				if (prev){
+					prev.getElement('a').focus();
+				} else {
+					searchInput.focus();
+					searchInput.select();
+				}
+			}
+		},
+		// cancels the keyboard navigation when cursor kicks in
+		mouseenter: function(){
+			var links = searchResult.getElements('a');
+			if (!links.length) return;
+			links.each(function(link){
+				link.blur();
+			});
+		}
+	});
+	
+	var descLimit = 40;
+
+	var request = new Request({
+		url: yqlAPI,
+		link: 'cancel',
+		onSuccess: function(text){
+			var content = text.split('<results>');
+			if (content.length > 1 || content[1]){
+				var result = content[1].split('</results>')[0];
+				var temp = new Element('div', {html: result});
+				var html = '';
+				temp.getElements('li').each(function(li){
+					var link = li.getElements('h3 a')[0];
+					var desc = li.getElements('p.description')[0].get('text');
+					if (desc.length > descLimit) desc = desc.slice(0, descLimit) + '&#8230;';
+					var data = {
+						url: link.getProperty('href'),
+						title: link.get('text'),
+						desc: desc
+					};
+					var source = '<li>'
+						+ '<a href="{url}" title="{url}" target="_blank"><strong>{title}</strong> <span class="desc">{desc}</span></a>'
+						+ '</li>';
+					html += source.substitute(data);
+				});
+				html += ('<li class="more"><a href="' + mootoolsQuery + '" target="_blank" title="more results from MooTools Search site">&laquo; More</a></li>').substitute({q: query});
+				searchResult.set('html', html);
+				searchResult.setStyle('display', 'block');
+				var height = searchResult.getSize().y;
+				searchResult.setStyle('height', 0);
+				searchResult.tween('height', height);
+				enableForm();
+			} else {
+				searchResult.setStyle('display', 'block');
+				searchResult.set('html', '<li class="not-found">Oops, nothing found.</li>');
+				enableForm();
+				searchInput.focus();
+				searchInput.select();
+			}
+		},
+		onCancel: function(){
+			enableForm();
+			searchInput.focus();
+		},
+		onFailure: function(){
+			enableForm();
+			searchInput.focus();
+			searchInput.select();
+		}
+	});
+	
+	$('search-form').addEvent('submit', function(e){
+		e.stop();
+		var q = searchInput.get('value').trim();
+		if (q === ''){
+			searchInput.focus();
+			return;
+		};
+		disableForm();
+		query = encodeURIComponent(q);
+		request.get({
+			q: yqlQuery.substitute({q: query}),
+			format: 'xml',
+			diagnostics: 'false'
+		});
+	});
+});
+</script>
+<form id="search-form">
+<label>
+<a href="http://mootools.net/search/" target="_blank"><img src="mootools.png" width="184" height="46" alt="MooTools"></a>
+<input type="search" value="" id="search-input">
+</label>
+<input type="submit" value="Search" id="search-button">
+</form>
+<ol id="search-result"></ol>

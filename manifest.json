@@ -1,0 +1,16 @@
+{
+	"name": "MooTools Search",
+	"version": "0.1",
+	"description": "Extension to search MooTools' blogs, demos, documentation, forums and tutorials.",
+	"icons": {
+		"48": "icon48.png",
+		"128": "icon128.png"
+	},
+	"browser_action": {
+		"default_icon": "icon.png",
+		"popup": "popup.html"
+	},
+	"permissions": [
+		"http://query.yahooapis.com/"
+	]
+}
