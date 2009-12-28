@@ -88,8 +88,6 @@ window.addEvent('domready', function(){
 		searchButton.setProperty('disabled', 'disabled');
 	};
 	
-	searchInput.focus();
-	
 	var downCount = 0;
 	// press down twice to shift focus to the result list
 	searchInput.addEvent('keyup', function(e){
@@ -223,7 +221,7 @@ window.addEvent('domready', function(){
 <form id="search-form">
 <label>
 <a href="http://mootools.net/search/" target="_blank"><img src="mootools.png" width="184" height="46" alt="MooTools"></a>
-<input type="search" value="" id="search-input">
+<input type="search" value="" id="search-input" autofocus placeholder="Search...">
 </label>
 <input type="submit" value="Search" id="search-button">
 </form>
