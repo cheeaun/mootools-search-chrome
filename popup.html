@@ -198,6 +198,7 @@ window.addEvent('domready', function(){
 		link: 'cancel',
 		onSuccess: processResults,
 		onCancel: function(){
+			requesting = false;
 			body.removeClass('busy');
 			enableForm();
 			searchInput.focus();
@@ -207,9 +208,13 @@ window.addEvent('domready', function(){
 			enableForm();
 			searchInput.focus();
 			searchInput.select();
+		},
+		onComplete: function(){
+			requesting = false;
 		}
 	});
 	
+	var requesting = false;
 	$('search-form').addEvent('submit', function(e){
 		e.stop();
 		var q = searchInput.get('value').trim();
@@ -224,11 +229,16 @@ window.addEvent('domready', function(){
 			processResults(requestCache[query]);
 		} else {
 			body.addClass('busy');
+			requesting = true;
 			request.get({
 				q: yqlQuery.substitute({q: query}),
 				format: 'json',
 				diagnostics: 'false'
 			});
+			// 5-second check in case internet slowz...
+			(function(){
+				if (requesting) request.cancel();
+			}).delay(5000);
 		}
 	});
 });
