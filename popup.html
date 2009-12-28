@@ -10,6 +10,10 @@ body{
 	width: 200px;
 	font-size: 12px;
 }
+body.busy,
+body.busy *{
+	cursor: progress;
+}
 #search-input{
 	width: 100%;
 }
@@ -45,7 +49,6 @@ body{
 	border-radius: 2px;
 	-webkit-border-radius: 2px;
 }
-#search-result a:hover,
 #search-result a:focus{
 	color: #fff;
 	background-color: #6B7B95;
@@ -53,6 +56,9 @@ body{
 #search-result a .desc{
 	display: block;
 	opacity: .6;
+}
+#search-result a b strong{
+	background-color: rgba(255,255,255,0.2);
 }
 a {
 	transition-duration: .2s;
@@ -65,10 +71,12 @@ a {
 <script>
 window.addEvent('domready', function(){
 	var query = '';
-	var mootoolsQuery = 'http://mootools.net/search/quicksearch.php?query={q}&results=5';
+	var mootoolsQuery = 'http://mootools.net/search/?query={q}&search=1';
+	var mootoolsAPIQuery = 'http://mootools.net/search/quicksearch.php?query={q}&results=5';
 	var yqlAPI = 'http://query.yahooapis.com/v1/public/yql';
-	var yqlQuery = 'select * from json where url="' + mootoolsQuery + '" and (itemPath="json.json.url" or itemPath="json.json.title" or itemPath="json.json.fulltxt")';
-
+	var yqlQuery = 'select * from json where url="' + mootoolsAPIQuery + '" and (itemPath="json.json.url" or itemPath="json.json.title" or itemPath="json.json.fulltxt")';
+	
+	var body = document.body;
 	var searchInput = $('search-input');
 	var searchButton = $('search-button');
 	var searchResult = $('search-result').set('tween', {
@@ -127,20 +135,24 @@ window.addEvent('domready', function(){
 			}
 		},
 		// cancels the keyboard navigation when cursor kicks in
-		mouseover: function(){
-			var links = searchResult.getElements('a');
-			if (!links.length) return;
-			links.each(function(link){
-				link.blur();
-			});
+		// BUT still allows the keyboard to kick in when keys are pressed! Hah!
+		mouseover: function(e){
+			var el = e.target;
+			if (el.get('tag') != 'a'){
+				var els = el.getParents('a');
+				if (!els.length) return;
+				el = els[0];
+			}
+			el.focus();
 		}
 	});
 	
-	var descLimit = 40;
+	var descLimit = 50;
 	var ellipsis = '&#8230;';
 	var requestCache = {};
 	
 	var processResults = function(data){
+		body.removeClass('busy');
 		if (!data || !data.query || !data.query.count || !data.query.results || !data.query.results.url.length){
 			searchResult.setStyle('display', 'block');
 			searchResult.set('html', '<li class="not-found">Oops, nothing found.</li>');
@@ -166,7 +178,7 @@ window.addEvent('domready', function(){
 					desc: desc
 				};
 				html += ('<li>'
-					+ '<a href="{url}" title="{url}" target="_blank"><strong>{title}</strong> <span class="desc">{desc}</span></a>'
+					+ '<a href="{url}" title="{url}" target="_blank"><b>{title}</b> <span class="desc">{desc}</span></a>'
 					+ '</li>').substitute(data);
 			}
 			html += ('<li class="more">'
@@ -186,10 +198,12 @@ window.addEvent('domready', function(){
 		link: 'cancel',
 		onSuccess: processResults,
 		onCancel: function(){
+			body.removeClass('busy');
 			enableForm();
 			searchInput.focus();
 		},
 		onFailure: function(){
+			body.removeClass('busy');
 			enableForm();
 			searchInput.focus();
 			searchInput.select();
@@ -209,6 +223,7 @@ window.addEvent('domready', function(){
 		if (requestCache[query]){
 			processResults(requestCache[query]);
 		} else {
+			body.addClass('busy');
 			request.get({
 				q: yqlQuery.substitute({q: query}),
 				format: 'json',
